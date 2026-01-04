@@ -1,15 +1,29 @@
-# Dockerfile (multi-stage build)
-# Stage 1: build
-FROM maven:3.8.8-openjdk-17-slim AS build
-WORKDIR /app
-COPY pom.xml mvnw ./
-COPY .mvn .mvn
-COPY src ./src
-RUN mvn -B package -DskipTests
+# -------- Stage 1: Build --------
+FROM maven:3.9.6-eclipse-temurin-21 AS build
 
-# Stage 2: runtime
-FROM eclipse-temurin:17-jre-jammy
-ARG JAR_FILE=target/*.jar
+WORKDIR /app
+
+# Copy pom first for dependency caching
+COPY pom.xml .
+RUN mvn dependency:go-offline
+
+# Copy source code
+COPY src ./src
+
+# Build Spring Boot jar
+RUN mvn clean package -DskipTests
+
+
+# -------- Stage 2: Runtime --------
+FROM eclipse-temurin:21-jre
+
+WORKDIR /app
+
+# Copy fat jar from build stage
 COPY --from=build /app/target/*.jar app.jar
+
+# Spring Boot default port
 EXPOSE 8081
-ENTRYPOINT ["java","-jar","/app.jar"]
+
+# Run app
+ENTRYPOINT ["java", "-jar", "app.jar"]
